@@ -1,0 +1,6 @@
+{
+  "name": "NexaView TV",
+  "description": "Complete lightweight native Android TV launcher with Arabic RTL interface, two-row app grid, custom Arabic fonts, icon customization, and low-end device optimization.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

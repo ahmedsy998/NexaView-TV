@@ -1,0 +1,26 @@
+<resources>
+    <string name="app_name">NexaView TV</string>
+    <string name="nav_home">الرئيسية</string>
+    <string name="nav_apps">التطبيقات</string>
+    <string name="nav_movies">الأفلام</string>
+    <string name="nav_series">المسلسلات</string>
+    <string name="nav_favorites">المفضلة</string>
+    <string name="nav_files">الملفات</string>
+    <string name="nav_settings">الإعدادات</string>
+    <string name="all_apps_tile">كل التطبيقات</string>
+    <string name="context_app_info">معلومات التطبيق</string>
+    <string name="context_app_settings">ضبط التطبيق</string>
+    <string name="context_cancel">إلغاء</string>
+    <string name="no_independent_app_settings">لا تتوفر إعدادات مستقلة لهذا التطبيق.</string>
+    <string name="settings_icons">تخصيص الأيقونات</string>
+    <string name="settings_fonts">الخطوط والخطوط العربية</string>
+    <string name="settings_background">الخلفية والمظهر</string>
+    <string name="settings_clock">الساعة والتاريخ</string>
+    <string name="settings_home_apps">تطبيقات الشاشة الرئيسية</string>
+    <string name="settings_favorites">المفضلة</string>
+    <string name="settings_navigation">إعدادات التنقل والريموت</string>
+    <string name="settings_low_end">وضع الأجهزة الضعيفة</string>
+    <string name="settings_restore_defaults">استعادة الإعدادات الافتراضية</string>
+    <string name="settings_app_info">معلومات التطبيق</string>
+    <string name="pick_background_from_files">اختيار خلفية من الملفات</string>
+</resources>
