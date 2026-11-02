@@ -1,0 +1,138 @@
+name: Build NexaView TV APK
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-apk:
+    name: Build Installable Android APK
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21 (required for Gradle 9.3.1 / AGP 9.1.1, compiles Java 11 target)
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+
+      - name: Set up Android SDK (compileSdk 36.1 / build-tools 36.0.0)
+        run: |
+          set -euo pipefail
+          if [ -z "${ANDROID_HOME:-}" ] && [ -z "${ANDROID_SDK_ROOT:-}" ]; then
+            echo "::error::Android SDK environment variables (ANDROID_HOME / ANDROID_SDK_ROOT) are not set on this runner."
+            exit 1
+          fi
+          SDK_ROOT="${ANDROID_HOME:-$ANDROID_SDK_ROOT}"
+          SDKMANAGER="$SDK_ROOT/cmdline-tools/latest/bin/sdkmanager"
+          if [ ! -x "$SDKMANAGER" ]; then
+            SDKMANAGER=$(find "$SDK_ROOT" -name sdkmanager -type f | head -n 1 || true)
+          fi
+          if [ -z "$SDKMANAGER" ]; then
+            echo "::error::sdkmanager binary could not be located in $SDK_ROOT."
+            exit 1
+          fi
+          yes | "$SDKMANAGER" --licenses > /dev/null || true
+          "$SDKMANAGER" "platform-tools" "platforms;android-36" "platforms;android-36.1" "build-tools;36.0.0"
+
+      - name: Set up Gradle 9.3.1
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '9.3.1'
+
+      - name: Prepare signing keystores required by app/build.gradle.kts
+        env:
+          RELEASE_KEYSTORE_BASE64: ${{ secrets.RELEASE_KEYSTORE_BASE64 }}
+          STORE_PASSWORD_SECRET: ${{ secrets.STORE_PASSWORD }}
+          KEY_PASSWORD_SECRET: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          # 1. Restore or generate debug.keystore required by signingConfigs.getByName("debugConfig")
+          if [ -f "debug.keystore.base64" ] && [ ! -f "debug.keystore" ]; then
+            echo "Decoding debug.keystore from debug.keystore.base64..."
+            base64 --decode debug.keystore.base64 > debug.keystore
+          elif [ ! -f "debug.keystore" ]; then
+            echo "Generating debug.keystore for debugConfig..."
+            keytool -genkeypair -v \
+              -keystore debug.keystore \
+              -storepass android \
+              -alias androiddebugkey \
+              -keypass android \
+              -keyalg RSA \
+              -keysize 2048 \
+              -validity 10000 \
+              -dname "CN=Android Debug,O=Android,C=US"
+          fi
+
+          # 2. Restore or generate release keystore required by signingConfigs.getByName("release")
+          if [ -n "${RELEASE_KEYSTORE_BASE64:-}" ]; then
+            echo "Decoding release keystore from RELEASE_KEYSTORE_BASE64 secret..."
+            echo "$RELEASE_KEYSTORE_BASE64" | base64 --decode > my-upload-key.jks
+            echo "KEYSTORE_PATH=${GITHUB_WORKSPACE}/my-upload-key.jks" >> "$GITHUB_ENV"
+            echo "STORE_PASSWORD=${STORE_PASSWORD_SECRET}" >> "$GITHUB_ENV"
+            echo "KEY_PASSWORD=${KEY_PASSWORD_SECRET}" >> "$GITHUB_ENV"
+          else
+            echo "Generating self-signed release keystore (my-upload-key.jks, alias: upload) so :app:assembleRelease produces an installable signed APK..."
+            keytool -genkeypair -v \
+              -keystore my-upload-key.jks \
+              -storepass nexaviewrelease \
+              -alias upload \
+              -keypass nexaviewrelease \
+              -keyalg RSA \
+              -keysize 2048 \
+              -validity 10000 \
+              -dname "CN=NexaView TV,OU=TV,O=NexaView,L=Cairo,S=Cairo,C=EG"
+            echo "KEYSTORE_PATH=${GITHUB_WORKSPACE}/my-upload-key.jks" >> "$GITHUB_ENV"
+            echo "STORE_PASSWORD=nexaviewrelease" >> "$GITHUB_ENV"
+            echo "KEY_PASSWORD=nexaviewrelease" >> "$GITHUB_ENV"
+          fi
+
+      - name: Build installable Release and Debug APKs
+        run: |
+          set -euo pipefail
+          echo "Starting Gradle build for NexaView TV (:app:assembleRelease :app:assembleDebug)..."
+          if [ -f "./gradlew" ]; then
+            chmod +x ./gradlew
+            ./gradlew :app:assembleRelease :app:assembleDebug --no-daemon --stacktrace
+          else
+            gradle :app:assembleRelease :app:assembleDebug --no-daemon --stacktrace
+          fi
+
+      - name: Verify generated APK files
+        run: |
+          set -euo pipefail
+          RELEASE_APK="app/build/outputs/apk/release/app-release.apk"
+          DEBUG_APK="app/build/outputs/apk/debug/app-debug.apk"
+
+          if [ ! -s "$RELEASE_APK" ]; then
+            echo "::error file=app/build.gradle.kts::Release APK was not generated or is empty at $RELEASE_APK"
+            exit 1
+          fi
+
+          if [ ! -s "$DEBUG_APK" ]; then
+            echo "::error file=app/build.gradle.kts::Debug APK was not generated or is empty at $DEBUG_APK"
+            exit 1
+          fi
+
+          mkdir -p dist-apk
+          cp "$RELEASE_APK" "dist-apk/NexaView-TV-release.apk"
+          cp "$DEBUG_APK" "dist-apk/NexaView-TV-debug.apk"
+          ls -lh dist-apk/
+
+      - name: Upload NexaView-TV-APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: NexaView-TV-APK
+          path: |
+            dist-apk/NexaView-TV-release.apk
+            dist-apk/NexaView-TV-debug.apk
+          if-no-files-found: error
+          retention-days: 30
